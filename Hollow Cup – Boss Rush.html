@@ -429,6 +429,35 @@ const _dr4=draw;draw=function(){_dr4();if(S=='menu'||S=='lobby')return;
  if(P2o)for(let i=3;i<5;i++){g.fillStyle=i<P2o.hp?'#9fd0ff':'#222';g.strokeStyle='#9fd0ff';g.lineWidth=2;g.beginPath();g.ellipse(32+i*28,62,10,12,0,0,P2);g.fill();g.stroke()}
  if(S=='fight'&&boss.intro>0)tt('Double-jump = backflip · touch PINK shots mid-flip to parry: bounce + 1 life (max 5)',480,430,16,'#ff7ad9')};
 /* ===== end v6 ===== */
+/* ===== v7: worlds (saves) + 6-digit rooms + sturdier online ===== */
+addEventListener('keydown',e=>{if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))e.stopPropagation()},true);
+const LS={get(){try{return JSON.parse(localStorage.getItem('hc_w')||'null')}catch(e){return null}},set(v){try{localStorage.setItem('hc_w',JSON.stringify(v))}catch(e){}}};
+const sv=LS.get()||{list:[],cur:-1};const saveW=()=>LS.set(sv);
+const wp=document.createElement('div');wp.style.cssText='position:fixed;top:calc(6px + env(safe-area-inset-top,0px));right:6px;z-index:9;font:13px Georgia,serif;color:#e8e4d8;background:rgba(0,0,0,.6);padding:6px 8px;border-radius:6px;display:flex;gap:6px;align-items:center';
+wp.innerHTML='World: <select id=ws></select><input id=wn placeholder="new world name" size=12><button id=wc>Create</button><button id=wd>Delete</button>';document.body.appendChild(wp);
+const wsE=document.getElementById('ws'),wnE=document.getElementById('wn');
+function renderW(){wsE.innerHTML=sv.list.map((w,i)=>'<option value='+i+(i==sv.cur?' selected':'')+'>'+String(w.name).replace(/[<&>]/g,'')+' – boss '+(w.maxBi+1)+'/20 · '+(w.deaths||0)+' deaths</option>').join('')}
+function loadW(i){sv.cur=i;const w=sv.list[i];if(w){maxBi=Math.min(19,w.maxBi);bi=Math.min(w.bi,maxBi)}saveW();renderW()}
+wsE.onchange=()=>{loadW(+wsE.value);wsE.blur()};
+document.getElementById('wc').onclick=()=>{const n=wnE.value.trim()||'World '+(sv.list.length+1);sv.list.push({name:n.slice(0,20),maxBi:0,bi:0,deaths:0,kos:0});wnE.value='';loadW(sv.list.length-1)};
+document.getElementById('wd').onclick=()=>{if(sv.cur<0)return;sv.list.splice(sv.cur,1);if(sv.list.length)loadW(0);else{sv.cur=-1;maxBi=0;bi=0;saveW();renderW()}};
+if(!sv.list.length){sv.list.push({name:'World 1',maxBi:0,bi:0,deaths:0,kos:0});sv.cur=0}
+loadW(Math.max(0,Math.min(sv.cur,sv.list.length-1)));
+let pS='menu';const _dr5=draw;draw=function(){_dr5();if(maxBi>19)maxBi=19;if(net.role!='guest'){const w=sv.list[sv.cur];if(w){let ch2=0;if(S=='dead'&&pS!='dead'){w.deaths=(w.deaths||0)+1;ch2=1}if(S=='ko'&&pS!='ko'){w.kos=(w.kos||0)+1;ch2=1}if(w.maxBi!=maxBi||w.bi!=bi)ch2=1;if(ch2){w.maxBi=maxBi;w.bi=bi;saveW();renderW()}}}pS=S};
+/* online: two boxes, TURN fallback, diagnostics, 6-digit rooms */
+bar.style.flexWrap='wrap';bar.style.maxWidth='min(620px,62vw)';bsE.style.flexBasis='100%';
+const bh6=document.createElement('button'),ccF=document.createElement('textarea');bh6.textContent='Host (6-digit)';ccF.rows=2;ccF.cols=22;ccF.style.fontSize='11px';ccF.placeholder="paste friend's / host code here";ccE.readOnly=true;ccE.placeholder='YOUR code appears here';ccE.style.display='';
+bar.insertBefore(bh6,bhE);bar.insertBefore(ccE,bsE);bar.insertBefore(ccF,bsE);bar.insertBefore(bcE,bsE);bhE.textContent='Host (link code)';bjE.textContent='Join';st('6-digit = both signed in to Claude with access. Link code = anyone, but long.');
+const mkpc=()=>{const q=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443?transport=tcp'],username:'openrelayproject',credential:'openrelayproject'}]});q.oniceconnectionstatechange=()=>{const s=q.iceConnectionState;if(s=='failed')st('Connection FAILED: your networks block direct links. Try 6-digit mode or another network.');else if(s=='checking')st('Connecting…');else if(s=='disconnected')st('Connection lost')};return q};
+const gather2=q=>new Promise(r=>{if(q.iceGatheringState=='complete')return r();q.addEventListener('icegatheringstatechange',()=>q.iceGatheringState=='complete'&&r());setTimeout(r,8000)});
+function hideBoxes(){bcE.style.display='none';ccE.style.display='none';ccF.style.display='none'}
+bh6.onclick=async()=>{document.activeElement.blur();if(!RM)return st('6-digit rooms need the published link while signed in to Claude (and your friend invited). Use link code instead.');const code=String(Math.floor(Math.random()*900000)+100000);try{net.room=await RM.join('hc'+code)}catch(e){return st('Could not open room. Use link code instead.')}net.role='host';ccE.value=code;st('Room '+code+' – tell your friend this 6-digit code. You are HOST.')};
+bhE.onclick=async()=>{document.activeElement.blur();if(!window.RTCPeerConnection)return st('WebRTC not supported here');try{pc=mkpc();const dc=pc.createDataChannel('g',{ordered:false,maxRetransmits:0});dc.onopen=()=>{mkRoom(dc,'host');hideBoxes()};st('Making your code (up to 8s)…');await pc.setLocalDescription(await pc.createOffer());await gather2(pc);ccE.value=enc(pc.localDescription);ccF.value='';bcE.style.display='';st('1) Send YOUR code (top box) to your friend. 2) Paste THEIR reply in the lower box, press Connect.')}catch(e){st('Could not create code')}};
+bcE.onclick=async()=>{try{await pc.setRemoteDescription(dec(ccF.value));st('Connecting…')}catch(e){st('Reply code invalid – paste your friend\'s reply in the LOWER box')}};
+bjE.onclick=async()=>{document.activeElement.blur();const v=ccF.value.trim();if(!v)return st('Paste the host code in the lower box first');
+ if(/^\d{6}$/.test(v)){if(!RM)return st('6-digit join needs the published link while signed in');try{net.room=await RM.join('hc'+v);net.role='guest';S='lobby';hideBoxes();st('Joined room '+v+' – pick a hero')}catch(e){st('Could not join that code')}return}
+ try{pc=mkpc();pc.ondatachannel=e=>{e.channel.onopen=()=>{mkRoom(e.channel,'guest');hideBoxes()}};await pc.setRemoteDescription(dec(v));await pc.setLocalDescription(await pc.createAnswer());st('Making reply (up to 8s)…');await gather2(pc);ccE.value=enc(pc.localDescription);st('Send YOUR reply code (top box) back to the host, then wait.')}catch(e){st('That host code is not valid')}};
+/* ===== end v7 ===== */
 let last=performance.now();
 function loop(n){const dt=Math.min(.033,(n-last)/1000);last=n;T+=S=='menu'?dt:0;tm+=dt;shake=Math.max(0,shake-40*dt);
  if(S=='fight')upd(dt);
