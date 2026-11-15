@@ -558,6 +558,39 @@ const _dr7=draw;draw=function(){
  if(toastT>0){toastT-=.016;g.globalAlpha=Math.min(1,toastT);tt(toastM,480,H-60,18,'#ffd36e');g.globalAlpha=1}};
 S='home';
 /* ===== end v9 ===== */
+/* ===== v10: lag fix (guest prediction, 60Hz, no double-encoding) + visible gadgets ===== */
+Object.defineProperty(M,'m',{get(){return !!this._m||!!K.KeyF||!!K.ShiftLeft},set(v){this._m=v}});
+function wireRoom(conn,role,peer){let loc={},rem=null,last=0,pend=null;
+ conn.on('data',d=>{if(d&&typeof d=='object')rem=Object.assign(rem||{},d)});
+ const gone=()=>{if(!net.room)return;try{peer.destroy()}catch(e){}net.room=null;net.role='off';net.gi=null;net.snap=null;net.gs=null;rem=null;co=false;P2o=null;mpx={buf:''};S='home';toast('Disconnected')};
+ conn.on('close',gone);conn.on('error',gone);
+ net.room={peers:()=>[{isMe:true,presence:loc}].concat(rem?[{isMe:false,presence:rem}]:[]),presence:o=>{Object.assign(loc,o);pend=Object.assign(pend||{},o);const n=performance.now();if(n-last>=16){last=n;const m=pend;pend=null;try{conn.send(m)}catch(e){}}return Promise.resolve()}};
+ net.role=role;net.sentFor=null;S=role=='guest'?'lobby':'menu';toast(role=='host'?'Friend connected! Pick your hero once they are ready.':'Connected! Pick a hero and press Ready.')}
+const gme={};
+function gstep(q,dt){const dir=(K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0),jm=!!(K.Space||K.KeyW||K.ArrowUp),cx=q.x+12,cy=q.y+19,a=Math.atan2(M.y-cy,M.x-cx),hc=P2o.ch;
+ flipStep(q,jm,dt);q.cd2-=dt;q.f=M.x>cx?1:-1;
+ if(M.r&&q.cd2<=0){if(hc==3){q.cd2=1.3;const d=Math.min(280,Math.hypot(M.x-cx,M.y-cy));q.x=Math.max(0,Math.min(W-24,cx+Math.cos(a)*d-12));q.y=Math.min(FY-38,Math.max(0,cy+Math.sin(a)*d-19));q.vx=Math.cos(a)*300;q.vy=Math.sin(a)*200-100}if(hc==6){q.cd2=1.1;q.vx=-Math.cos(a)*850;q.vy=-Math.sin(a)*850-200}}
+ q.vy=Math.min(q.vy+1900*dt,1500);q.vx+=(dir*300-q.vx)*Math.min(1,(q.gr?16:5)*dt);if(jm&&q.coy>0){q.vy=-700;q.coy=0}
+ q.x=Math.max(0,Math.min(W-24,q.x+q.vx*dt));const py=q.y+38;q.y=Math.max(0,q.y+q.vy*dt);q.gr=false;
+ if(q.vy>=0){if(q.y+38>=FY){q.y=FY-38;q.vy=0;q.gr=true}else for(const s of PL)if(q.x+24>s.x&&q.x<s.x+s.w&&py<=s.y+2&&q.y+38>=s.y){q.y=s.y-38;q.vy=0;q.gr=true}}
+ q.coy=q.gr?.1:(q.coy||0)-dt}
+const _gs3=guestStep;guestStep=function(dt0){_gs3(dt0);const s=net.snap;if(!s||s.S=='menu'||!P2o||!boss)return;const now=performance.now(),dt=Math.min(.05,(now-(gme.t||now))/1000);gme.t=now;const was=gme.fs;gme.fs=s.S;
+ if(s.S!='fight'){gme.x=P2o.x;gme.y=P2o.y;return}
+ if(was!='fight')Object.assign(gme,{x:P2o.x,y:P2o.y,vx:0,vy:0,ack:s.tp|0,a2:0,flip:0,cd2:0,gr:false,coy:0,f:1,pj:false,sb:{x:boss.x,y:boss.y},sp:{x:p.x,y:p.y}});
+ if((s.tp|0)!==gme.ack){gme.x=P2o.x;gme.y=P2o.y;gme.vx=gme.vy=0;gme.ack=s.tp|0}
+ if(!P2o.dead)gstep(gme,dt);
+ P2o.x=gme.x;P2o.y=gme.y;P2o.flip=gme.flip;P2o.f=gme.f;const an=Math.atan2(M.y-(P2o.y+19),M.x-(P2o.x+12));P2o.mx=P2o.x+12+Math.cos(an)*200;P2o.my=P2o.y+19+Math.sin(an)*200;
+ const k=Math.min(1,22*dt);gme.sb.x+=(boss.x-gme.sb.x)*k;gme.sb.y+=(boss.y-gme.sb.y)*k;boss.x=gme.sb.x;boss.y=gme.sb.y;gme.sp.x+=(p.x-gme.sp.x)*k;gme.sp.y+=(p.y-gme.sp.y)*k;p.x=gme.sp.x;p.y=gme.sp.y;
+ pr({s:[gme.x|0,gme.y|0,gme.vx|0,gme.vy|0,Math.round((gme.flip||0)*100)/100,gme.ack]})};
+const _sn3=snap;snap=function(){const s=_sn3();s.tp=P2o?P2o.tpc||0:0;return s};
+const _nt2=netTick;netTick=function(){_nt2();net.gs=null;if(net.room)for(const q of net.room.peers())if(!q.isMe&&q.presence.s)net.gs=q.presence.s};
+const _sp3=stepP2;stepP2=function(dt){const q=P2o,s=net.role=='host'&&net.gi?net.gs:null;if(!s){_sp3(dt);return}
+ if(q.lx!=null&&(q.x!==q.lx||q.y!==q.ly))q.tpc=(q.tpc||0)+1;else if(s[5]===(q.tpc||0)){q.x=s[0];q.y=s[1];q.vx=s[2];q.vy=s[3]}
+ const sx=q.x,sy=q.y,svx=q.vx,svy=q.vy,ok=s[5]===(q.tpc||0);_sp3(dt);q.x=sx;q.y=sy;q.vx=svx;q.vy=svy;if(ok)q.flip=s[4];q.lx=q.x;q.ly=q.y};
+function gbar(){const gu=net.role=='guest',me=gu?P2o:p,sel=gu?gsG:(p.gs|0),cd=me?me.gcd||0:0;for(let k=0;k<3;k++){const x=330+k*100,y=H-78,on=k==sel;g.fillStyle=on?'rgba(40,60,80,.92)':'rgba(8,14,20,.85)';g.strokeStyle=on?'#ffd36e':'#8aa0ab';g.lineWidth=on?3:1.5;g.fillRect(x,y,92,40);g.strokeRect(x,y,92,40);tt((k+1)+' '+['Swap','Pull','Clap'][k],x+46,y+17,13,'#fff');if(on&&cd>0){g.fillStyle='rgba(0,0,0,.55)';g.fillRect(x,y,92,40);tt(Math.ceil(cd)+'s',x+46,y+33,13,'#ffd36e')}else if(on)tt('F / Shift / MMB',x+46,y+33,10,'#7dffa0')}}
+const _oc6=onClick;onClick=function(){if(S=='fight'&&p){for(let k=0;k<3;k++)if(inb(330+k*100,H-78,92,40)){if(net.role=='guest')gsG=k;else p.gs=k;return}}_oc6()};
+const _dr8=draw;draw=function(){_dr8();if(S=='fight'&&p&&p.hp!=null)gbar()};
+/* ===== end v10 ===== */
 let last=performance.now();
 function loop(n){const dt=Math.min(.033,(n-last)/1000);last=n;T+=S=='menu'?dt:0;tm+=dt;shake=Math.max(0,shake-40*dt);
  if(S=='fight')upd(dt);
